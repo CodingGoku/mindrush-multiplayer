@@ -4,9 +4,15 @@
   "private": true,
   "description": "Real-time room-code party game built with Express and Socket.IO",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
-  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
+    "dotenv": "^18.0.7",
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
   }

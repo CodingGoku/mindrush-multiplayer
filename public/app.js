@@ -2,29 +2,32 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 
-const views = [
-  "home",
-  "lobby-view",
-  "question-view",
-  "result-view",
-  "finished-view"
-];
-
 let myId = null;
 let currentState = null;
 let lastPhase = null;
 let timerInterval = null;
 let toastTimeout = null;
+let noticeTimeout = null;
 let myAnswer = null;
 let lastRound = null;
+let startRequestPending = false;
+let startRequestTimeout = null;
 
 const letters = ["A", "B", "C", "D"];
+const ROUND_SECONDS = 15;
 
 socket.on("connect", () => {
   myId = socket.id;
 });
 
 socket.on("state", state => {
+  console.log("[DEBUG] State received:", {
+    phase: state.phase,
+    round: state.round,
+    hasResult: !!state.result,
+    explanation: state.result?.explanation
+  });
+
   currentState = state;
   render(state);
 });
@@ -33,7 +36,8 @@ socket.on("disconnect", () => {
   showToast("Connection lost. Trying to reconnect…");
 });
 
-socket.on("connect_error", () => {
+socket.on("connect_error", error => {
+  console.error("[SOCKET] Connection error:", error);
   showToast("Could not connect to the game server. Refresh and try again.");
 });
 
@@ -52,12 +56,16 @@ function showToast(message) {
 
 function showNotice(message) {
   const el = $("notice");
-  if (!el) return;
+  if (!el) {
+    showToast(message);
+    return;
+  }
 
   el.textContent = message;
   el.classList.remove("hidden");
 
-  setTimeout(() => {
+  clearTimeout(noticeTimeout);
+  noticeTimeout = setTimeout(() => {
     el.classList.add("hidden");
   }, 4000);
 }
@@ -160,8 +168,75 @@ if (params.has("room")) {
 
 /* Game controls */
 
+function resetStartRequest() {
+  startRequestPending = false;
+
+  if (startRequestTimeout) {
+    clearTimeout(startRequestTimeout);
+    startRequestTimeout = null;
+  }
+}
+
 $("start-btn").addEventListener("click", () => {
-  call("startGame", {});
+  if (startRequestPending || !currentState) return;
+  if (currentState.phase !== "lobby") return;
+
+  if (socket.id !== currentState.hostId) {
+    showToast("Only the host can start the game.");
+    return;
+  }
+
+  if (currentState.players.length < 2) {
+    showToast("Invite at least one more player.");
+    return;
+  }
+
+  if (currentState.generating) {
+    showToast("Groq is already generating your quiz.");
+    return;
+  }
+
+  startRequestPending = true;
+
+  const button = $("start-btn");
+  button.disabled = true;
+  button.textContent = "Generating fresh questions…";
+
+  console.log("[CLIENT] Requesting a new Groq quiz...");
+
+  socket.emit("startGame", {}, response => {
+    resetStartRequest();
+
+    if (response?.error) {
+      console.error("[CLIENT] Game start error:", response.error);
+      showNotice(response.error);
+      showToast(response.error);
+
+      if (currentState?.phase === "lobby") {
+        render(currentState);
+      }
+
+      return;
+    }
+
+    if (response?.ok) {
+      console.log("[CLIENT] Game started successfully.");
+    }
+  });
+
+  startRequestTimeout = setTimeout(() => {
+    if (!startRequestPending) return;
+
+    resetStartRequest();
+
+    showToast(
+      "The server did not respond. Check the terminal and try again."
+    );
+
+    if (currentState?.phase === "lobby") {
+      render(currentState);
+    }
+  }, 35000);
 });
 
 $("again-btn").addEventListener("click", () => {
@@ -170,6 +245,8 @@ $("again-btn").addEventListener("click", () => {
 
 $("leave-btn").addEventListener("click", () => {
   socket.emit("leaveRoom");
+
+  resetStartRequest();
 
   currentState = null;
   lastPhase = null;
@@ -254,6 +331,58 @@ function renderStandings(players, hostId, detailed = false) {
     `).join("");
 }
 
+/*
+ * Ensure the explanation element exists and is visible.
+ * It is placed immediately before the answer choices.
+ */
+
+function showRoundExplanation(explanation) {
+  const resultAnswers = $("result-answers");
+
+  if (!resultAnswers || !resultAnswers.parentNode) {
+    console.error("[DEBUG] Could not find #result-answers in the page.");
+    return;
+  }
+
+  let explanationEl = $("result-copy");
+
+  if (!explanationEl) {
+    explanationEl = document.createElement("p");
+    explanationEl.id = "result-copy";
+  }
+
+  // Move it into the correct location even if it already exists elsewhere.
+  resultAnswers.parentNode.insertBefore(explanationEl, resultAnswers);
+
+  explanationEl.textContent =
+    String(explanation || "").trim() ||
+    "An explanation was not provided for this question.";
+
+  explanationEl.classList.remove("hidden");
+
+  Object.assign(explanationEl.style, {
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    position: "relative",
+    color: "#d7d3e5",
+    fontSize: "14px",
+    lineHeight: "1.6",
+    margin: "12px 0 20px",
+    padding: "12px",
+    background: "#211c32",
+    borderRadius: "10px",
+    height: "auto",
+    maxHeight: "none",
+    overflow: "visible"
+  });
+
+  console.log(
+    "[DEBUG] Explanation displayed in results:",
+    explanationEl.textContent
+  );
+}
+
 /* Render the complete game state */
 
 function render(state) {
@@ -278,25 +407,35 @@ function render(state) {
       state.hostId
     );
 
-    $("start-btn").disabled = !isHost || state.players.length < 2;
+    const canStart =
+      isHost &&
+      state.players.length >= 2 &&
+      !state.generating &&
+      !startRequestPending;
 
-    $("start-btn").innerHTML = isHost
-      ? (
-          state.players.length < 2
-            ? "Waiting for one more player…"
-            : 'Start the brain battle <span>↗</span>'
-        )
-      : "Waiting for host to start…";
+    $("start-btn").disabled = !canStart;
 
-    $("host-hint").textContent = isHost
-      ? "Everyone here? Start whenever you're ready."
-      : "The host will start the game when everyone is ready.";
+    if (state.generating || startRequestPending) {
+      $("start-btn").textContent = "Generating fresh questions…";
+    } else if (!isHost) {
+      $("start-btn").textContent = "Waiting for host to start…";
+    } else if (state.players.length < 2) {
+      $("start-btn").textContent = "Waiting for one more player…";
+    } else {
+      $("start-btn").innerHTML =
+        'Start the brain battle <span>↗</span>';
+    }
+
+    $("host-hint").textContent = state.generating
+      ? "Groq is creating a fresh quiz. This may take a few seconds."
+      : isHost
+        ? "Everyone here? Start whenever you're ready."
+        : "The host will start the game when everyone is ready.";
   }
 
   /* Question */
 
-  if (state.phase === "question") {
-    // Reset the selected answer only when a new round starts.
+  if (state.phase === "question" && state.question) {
     if (lastPhase !== "question" || state.round !== lastRound) {
       myAnswer = null;
       lastRound = state.round;
@@ -311,7 +450,6 @@ function render(state) {
     $("answer-progress").textContent =
       `${state.question.answerCount} / ${state.players.length} players answered`;
 
-    // Cache choices because the server may omit them in the result phase.
     window.lastChoices = [...state.question.choices];
 
     const me = state.players.find(p => p.id === socket.id);
@@ -354,13 +492,18 @@ function render(state) {
 
   /* Round results */
 
-  if (state.phase === "result") {
+  if (state.phase === "result" && state.result) {
+    console.log("[DEBUG] Round result received:", state.result);
+    console.log(
+      "[DEBUG] Explanation received by client:",
+      state.result.explanation
+    );
+
     $("result-title").textContent = "And the answer is…";
 
-    $("result-copy").textContent =
-      "Nice work — here's how that round shook out.";
+    showRoundExplanation(state.result.explanation);
 
-    const correct = Number(state.result?.answer ?? -1);
+    const correct = Number(state.result.answer ?? -1);
     const cachedChoices = window.lastChoices || [];
 
     $("result-answers").innerHTML = cachedChoices
@@ -389,8 +532,11 @@ function render(state) {
       })
       .join("");
 
+    // Re-apply the explanation after rendering the answer choices.
+    showRoundExplanation(state.result.explanation);
+
     $("result-standings").innerHTML = renderStandings(
-      state.result?.standings || state.players,
+      state.result.standings || state.players,
       state.hostId,
       true
     );
@@ -432,9 +578,9 @@ function updateTimer(deadline) {
     $("timer-number").textContent = Math.ceil(remaining);
 
     $("timer-fill").style.width =
-      `${Math.max(0, remaining / 15 * 100)}%`;
+      `${Math.max(0, remaining / ROUND_SECONDS * 100)}%`;
 
-    if (remaining <= 0) {
+    if (remaining <= 0 && timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
     }
