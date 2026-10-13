@@ -71,7 +71,7 @@ function nextRound(room) {
 }
 function startGame(room) {
   if (room.players.size < 2) return { error: "Invite at least one more player before starting." };
-  room.round = 1;
+  room.round = 0;
   room.totalRounds = 8;
   room.questionOffset = Math.floor(Math.random() * QUESTIONS.length);
   nextRound(room);
