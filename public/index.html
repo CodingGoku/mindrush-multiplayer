@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0d18" />
+  <meta name="description" content="MindRush — a real-time multiplayer trivia party game." />
+  <title>MindRush — Play together</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="MindRush home"><span class="brand-mark">M</span><span>mind<span class="brand-accent">rush</span></span></a>
+      <div class="top-tag"><span class="live-dot"></span> REAL-TIME PARTY GAME</div>
+    </header>
+    <section id="home" class="hero">
+      <div class="eyebrow"><span>✦</span> YOUR CREW. YOUR CHALLENGE.</div>
+      <h1>Big brains.<br><span class="gradient-text">Bigger bragging rights.</span></h1>
+      <p class="hero-copy">Quick-fire trivia for your favorite people. Create a room, share the code, and let the brain battle begin.</p>
+      <div class="home-grid">
+        <form id="create-form" class="panel create-panel">
+          <div class="panel-icon violet">✦</div>
+          <h2>Start a room</h2><p>You're the host. Bring the squad.</p>
+          <label for="host-name">YOUR DISPLAY NAME</label>
+          <input id="host-name" maxlength="18" placeholder="e.g. Quiz Wizard" autocomplete="nickname" required />
+          <button class="btn btn-primary" type="submit">Create game room <span>↗</span></button>
+        </form>
+        <form id="join-form" class="panel join-panel">
+          <div class="panel-icon cyan">⌁</div>
+          <h2>Join the party</h2><p>Got a code? You're one step away.</p>
+          <label for="join-name">YOUR DISPLAY NAME</label>
+          <input id="join-name" maxlength="18" placeholder="What should we call you?" autocomplete="nickname" required />
+          <label for="room-code">ROOM CODE</label>
+          <input id="room-code" class="code-input" maxlength="6" placeholder="ABC123" autocomplete="off" required />
+          <button class="btn btn-secondary" type="submit">Jump into game <span>→</span></button>
+        </form>
+      </div>
+      <div class="feature-row"><span>⚡ 15-second rounds</span><span>♧ 2–8 players</span><span>◈ No sign-up needed</span></div>
+    </section>
+
+    <section id="game" class="game-view hidden">
+      <div class="game-header">
+        <button id="leave-btn" class="text-btn">← Leave room</button>
+        <div class="room-pill"><span>ROOM</span><strong id="room-code-display">------</strong><button id="copy-code" title="Copy invite link">Copy invite</button></div>
+      </div>
+      <div id="notice" class="notice hidden" role="status"></div>
+      <div id="lobby-view" class="game-layout">
+        <section class="panel lobby-main">
+          <div class="eyebrow"><span>✦</span> THE LOBBY</div>
+          <h1>Squad assembled<span class="accent-dot">.</span></h1>
+          <p class="muted">Waiting for your people to pull up.</p>
+          <div class="lobby-banner"><div><span class="banner-kicker">NEXT UP</span><strong>MindRush Trivia</strong><small>8 rounds · speed earns bonus points</small></div><div class="banner-emoji">🧠</div></div>
+          <div class="players-heading"><strong>Players in the room</strong><span id="player-count">0 / 8</span></div>
+          <div id="lobby-players" class="player-grid"></div>
+          <button id="start-btn" class="btn btn-primary full-btn">Start the brain battle <span>↗</span></button>
+          <p id="host-hint" class="tiny muted center">Only the host can start the game.</p>
+        </section>
+        <aside class="panel side-panel"><div class="side-symbol">✧</div><h3>How to play</h3><div class="rule"><span>01</span><p>Read the question and pick your answer.</p></div><div class="rule"><span>02</span><p>Be right and be quick to earn more points.</p></div><div class="rule"><span>03</span><p>Top the leaderboard after 8 rounds to claim the crown.</p></div><div class="side-note">Pro tip: speed matters, but accuracy matters more.</div></aside>
+      </div>
+      <section id="question-view" class="panel question-panel hidden">
+        <div class="question-top"><span id="category-chip" class="category-chip">BRAIN</span><span id="round-label" class="round-label">ROUND 1 / 8</span></div>
+        <div class="timer-row"><div class="timer-track"><div id="timer-fill"></div></div><strong id="timer-number">15</strong></div>
+        <h1 id="question-text">Question goes here?</h1>
+        <div id="answers" class="answers-grid"></div>
+        <div class="question-bottom"><span id="answer-progress">0 players answered</span><span>⚡ FAST ANSWERS SCORE MORE</span></div>
+      </section>
+      <section id="result-view" class="panel result-panel hidden">
+        <div class="result-icon">✦</div><div class="eyebrow">ROUND COMPLETE</div><h1 id="result-title">The answer is...</h1><p id="result-copy" class="muted"></p>
+        <div id="result-answers" class="result-answers"></div>
+        <div class="players-heading"><strong>Live standings</strong><span>UPDATED IN REAL TIME</span></div><div id="result-standings" class="standings"></div>
+        <p class="tiny muted center">Next round starts automatically…</p>
+      </section>
+      <section id="finished-view" class="panel finished-panel hidden">
+        <div class="trophy">🏆</div><div class="eyebrow">GAME OVER</div><h1 id="winner-title">We have a winner!</h1><p class="muted">Brains were tested. Bragging rights were earned.</p>
+        <div id="final-standings" class="standings"></div>
+        <button id="again-btn" class="btn btn-primary full-btn">Run it back <span>↻</span></button>
+        <p id="again-hint" class="tiny muted center">The host can start another game.</p>
+      </section>
+    </section>
+    <footer><span>© 2026 MINDRUSH</span><span>MADE FOR THE GROUP CHAT <b>♥</b></span></footer>
+  </main>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/socket.io/socket.io.js"></script><script src="/app.js"></script>
+</body>
+</html>
